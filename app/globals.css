@@ -24,6 +24,16 @@ a { color:inherit; }
 .flag-panel { justify-self:end; width:210px; aspect-ratio:4/5; background:linear-gradient(var(--red) 0 50%,#fff 50%); box-shadow:0 24px 55px rgba(79,45,30,.16); display:flex; flex-direction:column; justify-content:space-between; padding:24px; }
 .flag-panel span { color:#fff; font-family:var(--font-serif),serif; font-size:54px; }
 .flag-panel b { align-self:flex-end; color:var(--red); font-size:10px; letter-spacing:.14em; }
+.map-section { margin-bottom:22px; }
+.map-card { background:var(--card); border:1px solid var(--line); border-radius:4px; padding:28px; box-shadow:0 10px 30px rgba(42,35,26,.04); }
+.map-heading { align-items:center; }
+.map-provider { color:var(--muted); font-size:9px; letter-spacing:.13em; font-weight:800; }
+.map-frame { position:relative; height:440px; margin-top:20px; overflow:hidden; background:#d9dfd5; }
+.map-frame iframe { width:100%; height:100%; border:0; filter:saturate(.72) contrast(.94); }
+.map-overlay { position:absolute; z-index:2; left:22px; bottom:22px; width:min(360px,calc(100% - 44px)); padding:17px 19px; background:rgba(255,253,247,.94); border-left:4px solid var(--red); box-shadow:0 10px 28px rgba(24,33,29,.18); backdrop-filter:blur(8px); }
+.map-overlay span { display:block; color:var(--red); font-size:8px; letter-spacing:.15em; font-weight:800; margin-bottom:6px; }
+.map-overlay strong { display:block; font-family:var(--font-serif),serif; font-size:20px; }
+.map-overlay small { display:block; color:var(--muted); margin-top:4px; line-height:1.4; }
 .dashboard { display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:stretch; }
 .speech-card,.currency-card { background:var(--card); border:1px solid var(--line); border-radius:4px; padding:28px; box-shadow:0 10px 30px rgba(42,35,26,.04); min-width:0; }
 .card-heading { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; padding-bottom:20px; border-bottom:1px solid var(--line); }
@@ -97,6 +107,9 @@ footer p { margin:0; }
   .hero { min-height:0; padding-block:44px; }
   .hero h1 { font-size:48px; }
   .lede { font-size:15px; }
+  .map-card { padding:20px; }
+  .map-frame { height:360px; }
+  .map-overlay { left:12px; bottom:12px; width:calc(100% - 24px); }
   .speech-card,.currency-card { padding:20px; }
   .card-heading { display:block; }
   .verified,.market-live { margin-top:8px; }

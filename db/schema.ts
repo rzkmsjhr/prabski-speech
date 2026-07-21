@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const speechSchedule = sqliteTable("speech_schedule", {
   id: integer("id").primaryKey(),
@@ -9,5 +9,7 @@ export const speechSchedule = sqliteTable("speech_schedule", {
   timeZone: text("time_zone").notNull(),
   notes: text("notes").notNull().default(""),
   sourceUrl: text("source_url").notNull().default(""),
+  latitude: real("latitude").notNull().default(0),
+  longitude: real("longitude").notNull().default(0),
   updatedAt: text("updated_at").notNull(),
 });

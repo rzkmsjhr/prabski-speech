@@ -16,6 +16,8 @@ type SpeechRow = {
   time_zone: string;
   notes: string;
   source_url: string;
+  latitude: number;
+  longitude: number;
   updated_at: string;
 };
 
@@ -28,6 +30,8 @@ const schema = `CREATE TABLE IF NOT EXISTS speech_schedule (
   time_zone TEXT NOT NULL,
   notes TEXT NOT NULL DEFAULT '',
   source_url TEXT NOT NULL DEFAULT '',
+  latitude REAL NOT NULL DEFAULT 0,
+  longitude REAL NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 )`;
 
@@ -52,6 +56,8 @@ function serialize(row: SpeechRow | null) {
     timeZone: row.time_zone,
     notes: row.notes,
     sourceUrl: row.source_url,
+    latitude: row.latitude,
+    longitude: row.longitude,
     updatedAt: row.updated_at,
   };
 }
@@ -82,6 +88,8 @@ export async function PUT(request: Request) {
     const timeZone = String(input.timeZone || "Asia/Jakarta");
     const notes = String(input.notes || "").trim().slice(0, 500);
     const sourceUrl = String(input.sourceUrl || "").trim().slice(0, 500);
+    const latitude = Number(input.latitude);
+    const longitude = Number(input.longitude);
     if (!title || !venue || !city || Number.isNaN(Date.parse(startsAt))) {
       return Response.json({ error: "Lengkapi judul, lokasi, kota, tanggal, dan waktu." }, { status: 400 });
     }
@@ -91,15 +99,19 @@ export async function PUT(request: Request) {
     if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) {
       return Response.json({ error: "Tautan sumber harus diawali http:// atau https://." }, { status: 400 });
     }
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      return Response.json({ error: "Koordinat latitude atau longitude tidak valid." }, { status: 400 });
+    }
     const updatedAt = new Date().toISOString();
     const db = await database();
-    await db.prepare(`INSERT INTO speech_schedule (id, title, venue, city, starts_at, time_zone, notes, source_url, updated_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+    await db.prepare(`INSERT INTO speech_schedule (id, title, venue, city, starts_at, time_zone, notes, source_url, latitude, longitude, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET title = excluded.title, venue = excluded.venue, city = excluded.city,
       starts_at = excluded.starts_at, time_zone = excluded.time_zone, notes = excluded.notes,
-      source_url = excluded.source_url, updated_at = excluded.updated_at`)
-      .bind(title, venue, city, startsAt, timeZone, notes, sourceUrl, updatedAt).run();
-    return Response.json({ speech: { title, venue, city, startsAt, timeZone, notes, sourceUrl, updatedAt } });
+      source_url = excluded.source_url, latitude = excluded.latitude, longitude = excluded.longitude,
+      updated_at = excluded.updated_at`)
+      .bind(title, venue, city, startsAt, timeZone, notes, sourceUrl, latitude, longitude, updatedAt).run();
+    return Response.json({ speech: { title, venue, city, startsAt, timeZone, notes, sourceUrl, latitude, longitude, updatedAt } });
   } catch {
     return Response.json({ error: "Jadwal belum dapat disimpan." }, { status: 500 });
   }

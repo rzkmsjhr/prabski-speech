@@ -10,6 +10,8 @@ type Speech = {
   timeZone: string;
   notes: string;
   sourceUrl: string;
+  latitude: number;
+  longitude: number;
   updatedAt: string;
 };
 
@@ -23,6 +25,8 @@ type FormState = {
   timeZone: string;
   notes: string;
   sourceUrl: string;
+  latitude: string;
+  longitude: string;
 };
 
 const initialForm: FormState = {
@@ -35,6 +39,8 @@ const initialForm: FormState = {
   timeZone: "Asia/Jakarta",
   notes: "",
   sourceUrl: "",
+  latitude: "",
+  longitude: "",
 };
 
 const zoneOffsets: Record<string, string> = {
@@ -114,6 +120,37 @@ function TradingViewChart() {
   return <div ref={container} className="tradingview-widget-container chart-frame" aria-label="Grafik langsung kurs Dolar Amerika Serikat terhadap Rupiah Indonesia" />;
 }
 
+function SpeechMap({ speech }: { speech: Speech | null }) {
+  const latitude = speech?.latitude ?? -2.35;
+  const longitude = speech?.longitude ?? 117.5;
+  const latitudeSpan = speech ? 0.035 : 10;
+  const longitudeSpan = speech ? 0.055 : 25;
+  const bbox = [
+    longitude - longitudeSpan,
+    latitude - latitudeSpan,
+    longitude + longitudeSpan,
+    latitude + latitudeSpan,
+  ].join(",");
+  const marker = speech ? `&marker=${latitude}%2C${longitude}` : "";
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik${marker}`;
+
+  return (
+    <div className="map-frame">
+      <iframe
+        title={speech ? `Peta lokasi ${speech.venue}` : "Peta Indonesia"}
+        src={mapUrl}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+      <div className="map-overlay">
+        <span>{speech ? "TITIK PIDATO BERIKUTNYA" : "MENUNGGU TITIK LOKASI"}</span>
+        <strong>{speech ? speech.venue : "Indonesia"}</strong>
+        <small>{speech ? speech.city : "Koordinat akan muncul setelah jadwal diterbitkan"}</small>
+      </div>
+    </div>
+  );
+}
+
 export function SpeechDashboard() {
   const [speech, setSpeech] = useState<Speech | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,6 +206,8 @@ export function SpeechDashboard() {
           timeZone: form.timeZone,
           notes: form.notes,
           sourceUrl: form.sourceUrl,
+          latitude: Number(form.latitude),
+          longitude: Number(form.longitude),
         }),
       });
       const data = (await response.json()) as { speech?: Speech; error?: string };
@@ -226,6 +265,19 @@ export function SpeechDashboard() {
           <p className="lede">Jadwal, lokasi, hitung mundur, dan pergerakan Rupiah—diringkas dalam satu layar yang tenang dan mudah dibaca.</p>
         </div>
         <div className="flag-panel" aria-hidden="true"><span>08</span><b>INDONESIA</b></div>
+      </section>
+
+      <section className="map-section shell" aria-label="Peta lokasi pidato">
+        <article className="map-card">
+          <div className="card-heading map-heading">
+            <div>
+              <p className="section-kicker">PETA AGENDA</p>
+              <h2>Lokasi pidato berikutnya</h2>
+            </div>
+            <span className="map-provider">OPENSTREETMAP</span>
+          </div>
+          <SpeechMap speech={speech} />
+        </article>
       </section>
 
       <section className="dashboard shell" aria-label="Ringkasan utama">
@@ -296,6 +348,8 @@ export function SpeechDashboard() {
               <label>Waktu<input type="time" value={form.time} onChange={(e) => updateField("time", e.target.value)} required /></label>
               <label>Zona waktu<select value={form.timeZone} onChange={(e) => updateField("timeZone", e.target.value)}><option value="Asia/Jakarta">WIB (UTC+7)</option><option value="Asia/Makassar">WITA (UTC+8)</option><option value="Asia/Jayapura">WIT (UTC+9)</option></select></label>
               <label>Tautan sumber (opsional)<input type="url" value={form.sourceUrl} onChange={(e) => updateField("sourceUrl", e.target.value)} placeholder="https://…" /></label>
+              <label>Latitude<input type="number" step="any" min="-90" max="90" value={form.latitude} onChange={(e) => updateField("latitude", e.target.value)} placeholder="-6.1754" required /></label>
+              <label>Longitude<input type="number" step="any" min="-180" max="180" value={form.longitude} onChange={(e) => updateField("longitude", e.target.value)} placeholder="106.8272" required /></label>
               <label className="wide">Catatan (opsional)<textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Informasi akses, siaran, atau konteks singkat" maxLength={500} /></label>
             </div>
             <div className="form-actions"><button className="primary" disabled={saving}>{saving ? "Menyimpan…" : "Terbitkan jadwal"}</button><button className="secondary" type="button" disabled={saving || !speech} onClick={clearSpeech}>Kosongkan jadwal</button>{message && <p role="status">{message}</p>}</div>
