@@ -143,27 +143,35 @@ function TradingViewChart() {
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
     const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
     script.async = true;
     script.textContent = JSON.stringify({
       autosize: true,
-      symbol: "FX_IDC:USDIDR",
-      interval: "60",
-      timezone: "Asia/Jakarta",
-      theme: "light",
-      style: "2",
+      symbols: [["Dolar AS / Rupiah", "FX_IDC:USDIDR|1D"]],
+      chartOnly: false,
+      width: "100%",
+      height: "100%",
       locale: "id",
+      colorTheme: "light",
       backgroundColor: "#fffdf7",
       gridColor: "rgba(27, 36, 31, 0.07)",
-      hide_top_toolbar: false,
-      hide_side_toolbar: true,
-      hide_legend: false,
-      allow_symbol_change: false,
-      save_image: false,
-      calendar: false,
-      details: false,
-      hotlist: false,
-      withdateranges: true,
+      widgetFontColor: "#18211d",
+      fontColor: "#65716a",
+      chartType: "area",
+      lineColor: "#b91f2e",
+      topColor: "rgba(185, 31, 46, 0.18)",
+      bottomColor: "rgba(185, 31, 46, 0.02)",
+      lineWidth: 2,
+      showVolume: false,
+      showMA: false,
+      hideDateRanges: false,
+      hideMarketStatus: false,
+      hideSymbolLogo: false,
+      scalePosition: "right",
+      scaleMode: "Normal",
+      valuesTracking: "1",
+      changeMode: "price-and-percent",
+      dateRanges: ["1d|5", "1m|30", "3m|60", "12m|1D", "all|1M"],
     });
     container.current.append(widget, script);
   }, []);
