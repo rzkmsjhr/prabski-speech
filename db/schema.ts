@@ -1,7 +1,7 @@
 import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const speechSchedule = sqliteTable("speech_schedule", {
-  id: integer("id").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
   title: text("title").notNull(),
   venue: text("venue").notNull(),
   city: text("city").notNull(),

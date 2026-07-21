@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Speech = {
+  id: number;
   title: string;
   venue: string;
   city: string;
@@ -179,34 +180,75 @@ function TradingViewChart() {
   return <div ref={container} className="tradingview-widget-container chart-frame" aria-label="Grafik langsung kurs Dolar Amerika Serikat terhadap Rupiah Indonesia" />;
 }
 
-function SpeechMap({ speech }: { speech: Speech | null }) {
-  const latitude = speech?.latitude ?? -2.35;
-  const longitude = speech?.longitude ?? 117.5;
-  const latitudeSpan = speech ? 0.035 : 10;
-  const longitudeSpan = speech ? 0.055 : 25;
-  const bbox = [
-    longitude - longitudeSpan,
-    latitude - latitudeSpan,
-    longitude + longitudeSpan,
-    latitude + latitudeSpan,
-  ].join(",");
-  const marker = speech ? `&marker=${latitude}%2C${longitude}` : "";
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik${marker}`;
+function SpeechMap({ speeches }: { speeches: Speech[] }) {
+  const container = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!container.current) return;
+    let cancelled = false;
+    let map: import("leaflet").Map | undefined;
+
+    import("leaflet").then((leaflet) => {
+      if (cancelled || !container.current) return;
+      map = leaflet.map(container.current, { scrollWheelZoom: false, zoomControl: true }).setView([-2.35, 117.5], 5);
+      leaflet.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+      }).addTo(map);
+
+      const currentTime = Date.now();
+      const upcoming = speeches.filter((item) => new Date(item.startsAt).getTime() >= currentTime);
+      const nextId = upcoming[0]?.id;
+      const points: [number, number][] = [];
+      speeches.forEach((item) => {
+        const point: [number, number] = [item.latitude, item.longitude];
+        points.push(point);
+        const isPast = new Date(item.startsAt).getTime() < currentTime;
+        const color = item.id === nextId ? "#b91f2e" : isPast ? "#7d857f" : "#167453";
+        const marker = leaflet.circleMarker(point, {
+          radius: item.id === nextId ? 10 : 8,
+          color: "#fffdf7",
+          weight: 3,
+          fillColor: color,
+          fillOpacity: 1,
+        }).addTo(map!);
+        const popup = document.createElement("div");
+        const title = document.createElement("strong");
+        const detail = document.createElement("p");
+        title.textContent = item.title;
+        detail.textContent = `${formatDate(item.startsAt, item.timeZone)} · ${formatTime(item.startsAt, item.timeZone)} ${zoneLabels[item.timeZone] || ""} · ${item.venue}, ${item.city}`;
+        popup.append(title, detail);
+        marker.bindPopup(popup);
+      });
+      if (points.length === 1) map.setView(points[0], 12);
+      if (points.length > 1) map.fitBounds(points, { padding: [45, 45], maxZoom: 12 });
+    });
+
+    return () => {
+      cancelled = true;
+      map?.remove();
+    };
+  }, [speeches]);
 
   return (
     <div className="map-frame">
-      <iframe
-        title={speech ? `Peta lokasi ${speech.venue}` : "Peta Indonesia"}
-        src={mapUrl}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-      />
+      <div ref={container} className="leaflet-map" aria-label="Peta seluruh lokasi pidato" />
       <div className="map-overlay">
-        <span>{speech ? "TITIK PIDATO BERIKUTNYA" : "MENUNGGU TITIK LOKASI"}</span>
-        <strong>{speech ? speech.venue : "Indonesia"}</strong>
-        <small>{speech ? speech.city : "Koordinat akan muncul setelah jadwal diterbitkan"}</small>
+        <span>PETA SELURUH AGENDA</span>
+        <strong>{speeches.length} titik lokasi</strong>
+        <small>Merah: agenda berikutnya · Hijau: mendatang · Abu-abu: selesai</small>
       </div>
     </div>
+  );
+}
+
+function AgendaRow({ speech, label }: { speech: Speech; label?: string }) {
+  return (
+    <article className="agenda-row">
+      <div className="agenda-date"><strong>{new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", timeZone: speech.timeZone }).format(new Date(speech.startsAt))}</strong><span>{formatTime(speech.startsAt, speech.timeZone)} {zoneLabels[speech.timeZone] || ""}</span></div>
+      <div className="agenda-main"><div>{label && <span className="agenda-label">{label}</span>}<h3>{speech.title}</h3></div><p>{speech.venue} · {speech.city}</p></div>
+      {speech.youtubeUrl && <span className="agenda-video">YOUTUBE</span>}
+    </article>
   );
 }
 
@@ -237,21 +279,19 @@ function YouTubeLive({ url }: { url: string }) {
 }
 
 export function SpeechDashboard() {
-  const [speech, setSpeech] = useState<Speech | null>(null);
+  const [speeches, setSpeeches] = useState<Speech[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [form, setForm] = useState<FormState>(initialForm);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function loadSpeech() {
+  async function loadSpeeches() {
     try {
       const response = await fetch("/api/speech", { cache: "no-store" });
-      const data = (await response.json()) as { speech: Speech | null };
-      setSpeech(data.speech);
-      if (data.speech) {
-        setForm((current) => formFromSpeech(data.speech as Speech, current.adminKey));
-      }
+      const data = (await response.json()) as { speeches: Speech[] };
+      setSpeeches(data.speeches || []);
     } catch {
       setMessage("Jadwal belum dapat dimuat. Coba segarkan halaman.");
     } finally {
@@ -260,15 +300,16 @@ export function SpeechDashboard() {
   }
 
   useEffect(() => {
-    loadSpeech();
+    loadSpeeches();
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const remaining = useMemo(
-    () => (speech ? countdown(speech.startsAt, now) : null),
-    [speech, now],
-  );
+  const upcoming = useMemo(() => speeches.filter((item) => new Date(item.startsAt).getTime() >= now), [speeches, now]);
+  const past = useMemo(() => speeches.filter((item) => new Date(item.startsAt).getTime() < now).reverse(), [speeches, now]);
+  const nextSpeech = upcoming[0] || null;
+  const streamingSpeech = upcoming.find((item) => item.youtubeUrl) || null;
+  const remaining = useMemo(() => (nextSpeech ? countdown(nextSpeech.startsAt, now) : null), [nextSpeech, now]);
 
   function updateField(name: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -281,12 +322,13 @@ export function SpeechDashboard() {
     try {
       const startsAt = `${form.date}T${form.time}:00${zoneOffsets[form.timeZone]}`;
       const response = await fetch("/api/speech", {
-        method: "PUT",
+        method: editingId ? "PUT" : "POST",
         headers: {
           "content-type": "application/json",
           "x-admin-key": form.adminKey,
         },
         body: JSON.stringify({
+          id: editingId,
           title: form.title,
           venue: form.venue,
           city: form.city,
@@ -301,9 +343,11 @@ export function SpeechDashboard() {
       });
       const data = (await response.json()) as { speech?: Speech; error?: string };
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan jadwal.");
-      setSpeech(data.speech || null);
-      if (data.speech) setForm((current) => formFromSpeech(data.speech as Speech, current.adminKey));
-      setMessage("Jadwal berhasil diterbitkan.");
+      await loadSpeeches();
+      const action = editingId ? "diperbarui" : "ditambahkan";
+      setEditingId(null);
+      setForm((current) => ({ ...initialForm, adminKey: current.adminKey }));
+      setMessage(`Jadwal berhasil ${action}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Gagal menyimpan jadwal.");
     } finally {
@@ -311,22 +355,35 @@ export function SpeechDashboard() {
     }
   }
 
-  async function clearSpeech() {
+  function beginEdit(speech: Speech) {
+    setEditingId(speech.id);
+    setForm((current) => formFromSpeech(speech, current.adminKey));
+    setMessage(`Mengedit: ${speech.title}`);
+  }
+
+  function beginCreate() {
+    setEditingId(null);
+    setForm((current) => ({ ...initialForm, adminKey: current.adminKey }));
+    setMessage("Formulir siap untuk jadwal baru.");
+  }
+
+  async function deleteSpeech(speech: Speech) {
     if (!form.adminKey) {
       setMessage("Masukkan kunci admin terlebih dahulu.");
       return;
     }
+    if (!window.confirm(`Hapus jadwal “${speech.title}”?`)) return;
     setSaving(true);
     try {
-      const response = await fetch("/api/speech", {
+      const response = await fetch(`/api/speech?id=${speech.id}`, {
         method: "DELETE",
         headers: { "x-admin-key": form.adminKey },
       });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Gagal menghapus jadwal.");
-      setSpeech(null);
-      setForm((current) => ({ ...initialForm, adminKey: current.adminKey }));
-      setMessage("Jadwal telah dikosongkan.");
+      await loadSpeeches();
+      if (editingId === speech.id) beginCreate();
+      setMessage("Jadwal telah dihapus.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Gagal menghapus jadwal.");
     } finally {
@@ -362,11 +419,11 @@ export function SpeechDashboard() {
           <div className="card-heading map-heading">
             <div>
               <p className="section-kicker">PETA AGENDA</p>
-              <h2>Lokasi pidato berikutnya</h2>
+              <h2>Seluruh lokasi pidato</h2>
             </div>
             <span className="map-provider">OPENSTREETMAP</span>
           </div>
-          <SpeechMap speech={speech} />
+          <SpeechMap speeches={speeches} />
         </article>
       </section>
 
@@ -382,16 +439,16 @@ export function SpeechDashboard() {
 
           {loading ? (
             <div className="empty-state"><span className="loader" /> Memuat jadwal…</div>
-          ) : speech ? (
+          ) : nextSpeech ? (
             <div className="event-content">
-              <p className="event-date">{formatDate(speech.startsAt, speech.timeZone)}</p>
-              <h3>{speech.title}</h3>
+              <p className="event-date">{formatDate(nextSpeech.startsAt, nextSpeech.timeZone)}</p>
+              <h3>{nextSpeech.title}</h3>
               <div className="event-meta">
-                <div><span>WAKTU</span><strong>{formatTime(speech.startsAt, speech.timeZone)} {zoneLabels[speech.timeZone] || ""}</strong></div>
-                <div><span>LOKASI</span><strong>{speech.venue}</strong><small>{speech.city}</small></div>
+                <div><span>WAKTU</span><strong>{formatTime(nextSpeech.startsAt, nextSpeech.timeZone)} {zoneLabels[nextSpeech.timeZone] || ""}</strong></div>
+                <div><span>LOKASI</span><strong>{nextSpeech.venue}</strong><small>{nextSpeech.city}</small></div>
               </div>
-              {speech.notes && <p className="event-notes">{speech.notes}</p>}
-              {speech.sourceUrl && <a className="source-link" href={speech.sourceUrl} target="_blank" rel="noreferrer">Lihat sumber jadwal ↗</a>}
+              {nextSpeech.notes && <p className="event-notes">{nextSpeech.notes}</p>}
+              {nextSpeech.sourceUrl && <a className="source-link" href={nextSpeech.sourceUrl} target="_blank" rel="noreferrer">Lihat sumber jadwal ↗</a>}
               {remaining && (
                 <div className="countdown" aria-label="Hitung mundur menuju acara">
                   {remaining.passed ? <p className="event-started">Waktu acara telah tiba</p> : [
@@ -406,7 +463,7 @@ export function SpeechDashboard() {
           ) : (
             <div className="empty-state no-event">
               <span className="calendar-icon">—</span>
-              <div><strong>Belum ada jadwal yang diterbitkan</strong><p>Gunakan panel editor di bawah saat Anda menemukan agenda berikutnya.</p></div>
+              <div><strong>Belum ada agenda mendatang</strong><p>Tambahkan jadwal baru melalui panel pengelolaan di bawah.</p></div>
             </div>
           )}
         </article>
@@ -424,15 +481,32 @@ export function SpeechDashboard() {
         </article>
       </section>
 
-      {speech?.youtubeUrl && <YouTubeLive url={speech.youtubeUrl} />}
+      <section className="agenda-section shell" aria-label="Daftar seluruh agenda pidato">
+        <div className="agenda-heading">
+          <div><p className="section-kicker">KALENDER PIDATO</p><h2>Seluruh jadwal</h2></div>
+          <div className="agenda-count"><strong>{upcoming.length}</strong><span>MENDATANG</span></div>
+        </div>
+        <div className="agenda-list">
+          {upcoming.length ? upcoming.map((item, index) => <AgendaRow key={item.id} speech={item} label={index === 0 ? "BERIKUTNYA" : undefined} />) : <p className="agenda-empty">Belum ada jadwal mendatang.</p>}
+        </div>
+        {past.length > 0 && <details className="past-agenda"><summary>Lihat {past.length} agenda yang telah selesai</summary><div className="agenda-list past-list">{past.map((item) => <AgendaRow key={item.id} speech={item} label="SELESAI" />)}</div></details>}
+      </section>
+
+      {streamingSpeech && <YouTubeLive url={streamingSpeech.youtubeUrl} />}
 
       <section className="editor shell">
         <details>
-          <summary><span><b>＋</b> Kelola jadwal pidato</span><small>KHUSUS ADMIN</small></summary>
+          <summary><span><b>＋</b> Kelola semua jadwal</span><small>KHUSUS ADMIN</small></summary>
           <form onSubmit={submitSpeech}>
+            <div className="schedule-manager">
+              <div className="manager-heading"><div><p className="section-kicker">DATA TERSIMPAN</p><h2>{speeches.length} jadwal</h2></div><button type="button" className="primary compact" onClick={beginCreate}>＋ Tambah baru</button></div>
+              <div className="manager-list">
+                {speeches.length ? speeches.map((item) => <div className={`manager-row ${editingId === item.id ? "is-editing" : ""}`} key={item.id}><div><strong>{item.title}</strong><span>{formatDate(item.startsAt, item.timeZone)} · {formatTime(item.startsAt, item.timeZone)} {zoneLabels[item.timeZone] || ""} · {item.city}</span></div><div><button type="button" onClick={() => beginEdit(item)}>Edit</button><button type="button" className="danger" onClick={() => deleteSpeech(item)} disabled={saving}>Hapus</button></div></div>) : <p className="manager-empty">Belum ada jadwal tersimpan.</p>}
+              </div>
+            </div>
             <div className="form-intro">
-              <div><h2>{speech ? "Edit agenda aktif" : "Terbitkan agenda berikutnya"}</h2>{speech && <button className="load-current" type="button" onClick={() => setForm((current) => formFromSpeech(speech, current.adminKey))}>Muat ulang data aktif</button>}</div>
-              <p>{speech ? "Data aktif sudah dimuat ke formulir. Ubah bagian yang diperlukan, lalu tekan Terbitkan jadwal untuk memperbaruinya." : "Isi data yang sudah Anda verifikasi. Jadwal terakhir akan langsung menggantikan jadwal sebelumnya."}</p>
+              <div><h2>{editingId ? "Edit jadwal" : "Tambah jadwal baru"}</h2>{editingId && <button className="load-current" type="button" onClick={() => { const item = speeches.find((entry) => entry.id === editingId); if (item) beginEdit(item); }}>Muat ulang data</button>}</div>
+              <p>{editingId ? "Ubah data yang diperlukan, lalu simpan untuk memperbarui jadwal ini." : "Isi satu agenda. Setelah tersimpan, Anda dapat menambah agenda berikutnya tanpa mengganti data sebelumnya."}</p>
             </div>
             <div className="form-grid">
               <label className="wide">Kunci admin<input type="password" value={form.adminKey} onChange={(e) => updateField("adminKey", e.target.value)} autoComplete="current-password" required /></label>
@@ -448,7 +522,7 @@ export function SpeechDashboard() {
               <label className="wide">Tautan YouTube Live (opsional)<input type="url" value={form.youtubeUrl} onChange={(e) => updateField("youtubeUrl", e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /><small className="field-help">Kosongkan agar bagian siaran langsung tidak ditampilkan.</small></label>
               <label className="wide">Catatan (opsional)<textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Informasi akses, siaran, atau konteks singkat" maxLength={500} /></label>
             </div>
-            <div className="form-actions"><button className="primary" disabled={saving}>{saving ? "Menyimpan…" : "Terbitkan jadwal"}</button><button className="secondary" type="button" disabled={saving || !speech} onClick={clearSpeech}>Kosongkan jadwal</button>{message && <p role="status">{message}</p>}</div>
+            <div className="form-actions"><button className="primary" disabled={saving}>{saving ? "Menyimpan…" : editingId ? "Simpan perubahan" : "Tambahkan jadwal"}</button>{editingId && <button className="secondary" type="button" disabled={saving} onClick={beginCreate}>Batal edit</button>}{message && <p role="status">{message}</p>}</div>
           </form>
         </details>
       </section>

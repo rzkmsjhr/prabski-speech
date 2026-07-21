@@ -3,12 +3,14 @@ import { env } from "cloudflare:workers";
 type Statement = {
   bind: (...values: unknown[]) => Statement;
   first: <T>() => Promise<T | null>;
+  all: <T>() => Promise<{ results: T[] }>;
   run: () => Promise<unknown>;
 };
 
 type Database = { prepare: (query: string) => Statement };
 
 type SpeechRow = {
+  id: number;
   title: string;
   venue: string;
   city: string;
@@ -22,8 +24,21 @@ type SpeechRow = {
   updated_at: string;
 };
 
+type SpeechInput = {
+  title: string;
+  venue: string;
+  city: string;
+  startsAt: string;
+  timeZone: string;
+  notes: string;
+  sourceUrl: string;
+  latitude: number;
+  longitude: number;
+  youtubeUrl: string;
+};
+
 const schema = `CREATE TABLE IF NOT EXISTS speech_schedule (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
   venue TEXT NOT NULL,
   city TEXT NOT NULL,
@@ -48,9 +63,9 @@ async function database() {
   return db;
 }
 
-function serialize(row: SpeechRow | null) {
-  if (!row) return null;
+function serialize(row: SpeechRow) {
   return {
+    id: row.id,
     title: row.title,
     venue: row.venue,
     city: row.city,
@@ -70,13 +85,68 @@ function authorized(request: Request) {
   return Boolean(expected && request.headers.get("x-admin-key") === expected);
 }
 
+function validate(input: Record<string, unknown>): { data?: SpeechInput; error?: string } {
+  const title = String(input.title || "").trim().slice(0, 140);
+  const venue = String(input.venue || "").trim().slice(0, 120);
+  const city = String(input.city || "").trim().slice(0, 120);
+  const startsAt = String(input.startsAt || "");
+  const timeZone = String(input.timeZone || "Asia/Jakarta");
+  const notes = String(input.notes || "").trim().slice(0, 500);
+  const sourceUrl = String(input.sourceUrl || "").trim().slice(0, 500);
+  const latitude = Number(input.latitude);
+  const longitude = Number(input.longitude);
+  const youtubeUrl = String(input.youtubeUrl || "").trim().slice(0, 500);
+
+  if (!title || !venue || !city || Number.isNaN(Date.parse(startsAt))) {
+    return { error: "Lengkapi judul, lokasi, kota, tanggal, dan waktu." };
+  }
+  if (!Object.hasOwn({ "Asia/Jakarta": 1, "Asia/Makassar": 1, "Asia/Jayapura": 1 }, timeZone)) {
+    return { error: "Zona waktu tidak dikenali." };
+  }
+  if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) {
+    return { error: "Tautan sumber harus diawali http:// atau https://." };
+  }
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    return { error: "Koordinat latitude atau longitude tidak valid." };
+  }
+  if (youtubeUrl) {
+    try {
+      const url = new URL(youtubeUrl);
+      const host = url.hostname.replace(/^www\./, "");
+      if (!["youtube.com", "m.youtube.com", "youtu.be"].includes(host)) throw new Error();
+    } catch {
+      return { error: "Tautan YouTube tidak valid." };
+    }
+  }
+  return { data: { title, venue, city, startsAt, timeZone, notes, sourceUrl, latitude, longitude, youtubeUrl } };
+}
+
 export async function GET() {
   try {
     const db = await database();
-    const row = await db.prepare("SELECT * FROM speech_schedule WHERE id = 1").first<SpeechRow>();
-    return Response.json({ speech: serialize(row) }, { headers: { "cache-control": "no-store" } });
+    const result = await db.prepare("SELECT * FROM speech_schedule ORDER BY starts_at ASC, id ASC").all<SpeechRow>();
+    return Response.json({ speeches: result.results.map(serialize) }, { headers: { "cache-control": "no-store" } });
   } catch {
-    return Response.json({ speech: null }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ speeches: [] }, { headers: { "cache-control": "no-store" } });
+  }
+}
+
+export async function POST(request: Request) {
+  if (!authorized(request)) return Response.json({ error: "Kunci admin tidak valid." }, { status: 401 });
+  try {
+    const parsed = validate((await request.json()) as Record<string, unknown>);
+    if (!parsed.data) return Response.json({ error: parsed.error }, { status: 400 });
+    const data = parsed.data;
+    const updatedAt = new Date().toISOString();
+    const db = await database();
+    const row = await db.prepare(`INSERT INTO speech_schedule (title, venue, city, starts_at, time_zone, notes, source_url, latitude, longitude, youtube_url, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`)
+      .bind(data.title, data.venue, data.city, data.startsAt, data.timeZone, data.notes, data.sourceUrl, data.latitude, data.longitude, data.youtubeUrl, updatedAt)
+      .first<SpeechRow>();
+    if (!row) throw new Error();
+    return Response.json({ speech: serialize(row) }, { status: 201 });
+  } catch {
+    return Response.json({ error: "Jadwal belum dapat disimpan." }, { status: 500 });
   }
 }
 
@@ -84,57 +154,31 @@ export async function PUT(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Kunci admin tidak valid." }, { status: 401 });
   try {
     const input = (await request.json()) as Record<string, unknown>;
-    const title = String(input.title || "").trim().slice(0, 140);
-    const venue = String(input.venue || "").trim().slice(0, 120);
-    const city = String(input.city || "").trim().slice(0, 120);
-    const startsAt = String(input.startsAt || "");
-    const timeZone = String(input.timeZone || "Asia/Jakarta");
-    const notes = String(input.notes || "").trim().slice(0, 500);
-    const sourceUrl = String(input.sourceUrl || "").trim().slice(0, 500);
-    const latitude = Number(input.latitude);
-    const longitude = Number(input.longitude);
-    const youtubeUrl = String(input.youtubeUrl || "").trim().slice(0, 500);
-    if (!title || !venue || !city || Number.isNaN(Date.parse(startsAt))) {
-      return Response.json({ error: "Lengkapi judul, lokasi, kota, tanggal, dan waktu." }, { status: 400 });
-    }
-    if (!Object.hasOwn({ "Asia/Jakarta": 1, "Asia/Makassar": 1, "Asia/Jayapura": 1 }, timeZone)) {
-      return Response.json({ error: "Zona waktu tidak dikenali." }, { status: 400 });
-    }
-    if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) {
-      return Response.json({ error: "Tautan sumber harus diawali http:// atau https://." }, { status: 400 });
-    }
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-      return Response.json({ error: "Koordinat latitude atau longitude tidak valid." }, { status: 400 });
-    }
-    if (youtubeUrl) {
-      try {
-        const url = new URL(youtubeUrl);
-        const host = url.hostname.replace(/^www\./, "");
-        if (!["youtube.com", "m.youtube.com", "youtu.be"].includes(host)) throw new Error();
-      } catch {
-        return Response.json({ error: "Tautan YouTube tidak valid." }, { status: 400 });
-      }
-    }
+    const id = Number(input.id);
+    if (!Number.isInteger(id) || id < 1) return Response.json({ error: "Jadwal tidak dikenali." }, { status: 400 });
+    const parsed = validate(input);
+    if (!parsed.data) return Response.json({ error: parsed.error }, { status: 400 });
+    const data = parsed.data;
     const updatedAt = new Date().toISOString();
     const db = await database();
-    await db.prepare(`INSERT INTO speech_schedule (id, title, venue, city, starts_at, time_zone, notes, source_url, latitude, longitude, youtube_url, updated_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET title = excluded.title, venue = excluded.venue, city = excluded.city,
-      starts_at = excluded.starts_at, time_zone = excluded.time_zone, notes = excluded.notes,
-      source_url = excluded.source_url, latitude = excluded.latitude, longitude = excluded.longitude,
-      youtube_url = excluded.youtube_url, updated_at = excluded.updated_at`)
-      .bind(title, venue, city, startsAt, timeZone, notes, sourceUrl, latitude, longitude, youtubeUrl, updatedAt).run();
-    return Response.json({ speech: { title, venue, city, startsAt, timeZone, notes, sourceUrl, latitude, longitude, youtubeUrl, updatedAt } });
+    const row = await db.prepare(`UPDATE speech_schedule SET title = ?, venue = ?, city = ?, starts_at = ?, time_zone = ?, notes = ?,
+      source_url = ?, latitude = ?, longitude = ?, youtube_url = ?, updated_at = ? WHERE id = ? RETURNING *`)
+      .bind(data.title, data.venue, data.city, data.startsAt, data.timeZone, data.notes, data.sourceUrl, data.latitude, data.longitude, data.youtubeUrl, updatedAt, id)
+      .first<SpeechRow>();
+    if (!row) return Response.json({ error: "Jadwal tidak ditemukan." }, { status: 404 });
+    return Response.json({ speech: serialize(row) });
   } catch {
-    return Response.json({ error: "Jadwal belum dapat disimpan." }, { status: 500 });
+    return Response.json({ error: "Jadwal belum dapat diperbarui." }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Kunci admin tidak valid." }, { status: 401 });
   try {
+    const id = Number(new URL(request.url).searchParams.get("id"));
+    if (!Number.isInteger(id) || id < 1) return Response.json({ error: "Jadwal tidak dikenali." }, { status: 400 });
     const db = await database();
-    await db.prepare("DELETE FROM speech_schedule WHERE id = 1").run();
+    await db.prepare("DELETE FROM speech_schedule WHERE id = ?").bind(id).run();
     return Response.json({ ok: true });
   } catch {
     return Response.json({ error: "Jadwal belum dapat dihapus." }, { status: 500 });

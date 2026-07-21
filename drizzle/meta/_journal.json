@@ -22,6 +22,13 @@
       "when": 1784622633188,
       "tag": "0002_chunky_fat_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784623571582,
+      "tag": "0003_mute_wallop",
+      "breakpoints": true
     }
   ]
 }
