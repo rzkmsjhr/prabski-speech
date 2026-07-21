@@ -144,24 +144,49 @@ function TradingViewChart() {
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
     const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
     script.async = true;
     script.textContent = JSON.stringify({
       autosize: true,
-      symbol: "FX_IDC:USDIDR",
-      chartOnly: false,
+      symbols: [["USD / IDR", "FX_IDC:USDIDR|1D"]],
+      chartOnly: true,
       width: "100%",
       height: "100%",
       locale: "id",
       colorTheme: "light",
       isTransparent: true,
-      dateRange: "1M",
+      backgroundColor: "#fffdf7",
+      gridLineColor: "rgba(24, 33, 29, 0.10)",
+      fontColor: "#59635e",
+      widgetFontColor: "#18211d",
+      fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+      fontSize: "10",
+      showVolume: false,
+      showMA: false,
+      hideDateRanges: false,
+      hideMarketStatus: true,
+      hideSymbolLogo: true,
+      scalePosition: "right",
+      scaleMode: "Normal",
       noTimeScale: false,
+      valuesTracking: "1",
+      changeMode: "price-and-percent",
+      chartType: "area",
+      lineColor: "#ff3545",
+      topColor: "rgba(255, 53, 69, 0.28)",
+      bottomColor: "rgba(255, 53, 69, 0.02)",
+      lineWidth: 2,
+      lineType: 0,
+      dateRanges: ["1d|5", "5d|15", "1m|60", "6m|1D", "12m|1D", "60m|1W", "120m|1W", "all|1M"],
     });
     container.current.append(widget, script);
   }, []);
 
-  return <div ref={container} className="tradingview-widget-container chart-frame" aria-label="Grafik langsung kurs Dolar Amerika Serikat terhadap Rupiah Indonesia" />;
+  return (
+    <div className="chart-frame" aria-label="Grafik langsung kurs Dolar Amerika Serikat terhadap Rupiah Indonesia">
+      <div ref={container} className="tradingview-widget-container" />
+    </div>
+  );
 }
 
 function SpeechMap({ speeches }: { speeches: Speech[] }) {
@@ -449,6 +474,14 @@ export function SpeechDashboard() {
             <span className="market-live"><i /> LIVE</span>
           </div>
           <p className="chart-note">Pergerakan Dolar AS terhadap Rupiah Indonesia. Grafik diperbarui langsung oleh TradingView.</p>
+          <nav className="market-tabs" aria-label="Navigasi pasar TradingView">
+            <span className="active">Ikhtisar</span>
+            <a href="https://id.tradingview.com/symbols/USDIDR/news/" target="_blank" rel="noreferrer">Berita</a>
+            <a href="https://id.tradingview.com/symbols/USDIDR/ideas/" target="_blank" rel="noreferrer">Komunitas</a>
+            <a href="https://id.tradingview.com/symbols/USDIDR/technicals/" target="_blank" rel="noreferrer">Teknikal</a>
+            <a href="https://id.tradingview.com/symbols/USDIDR/seasonals/" target="_blank" rel="noreferrer">Musiman</a>
+            <a href="https://id.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer">Kalender Ekonomi</a>
+          </nav>
           <TradingViewChart />
         </article>
       </section>

@@ -79,9 +79,14 @@ a { color:inherit; }
 .market-live { color:var(--green); display:flex; align-items:center; gap:8px; padding-top:7px; }
 .market-live i { background:var(--green); box-shadow:0 0 0 4px rgba(22,116,83,.11); }
 .chart-note { color:var(--muted); font-size:12px; line-height:1.5; margin:18px 0 14px; }
-.chart-frame { position:relative; width:100%; min-height:285px; aspect-ratio:16/9; overflow:hidden!important; contain:layout paint; }
+.market-tabs { display:flex; align-items:center; gap:25px; min-width:0; margin:0 0 16px; padding:0 4px 11px; border-bottom:3px solid #efefef; overflow-x:auto; scrollbar-width:none; }
+.market-tabs::-webkit-scrollbar { display:none; }
+.market-tabs a,.market-tabs span { position:relative; flex:0 0 auto; color:var(--ink); font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; }
+.market-tabs a:hover { color:var(--red); }
+.market-tabs .active::after { content:""; position:absolute; left:0; right:0; bottom:-14px; height:3px; background:var(--ink); }
+.chart-frame { position:relative; width:100%; height:470px; min-height:0; aspect-ratio:auto; overflow:hidden!important; contain:layout paint; }
 .chart-frame > div,.chart-frame iframe { height:100%!important; max-height:100%!important; width:100%!important; display:block; }
-.market-only .chart-frame { height:340px; min-height:0; aspect-ratio:auto; }
+.market-only .chart-frame { height:470px; }
 .agenda-section { margin-top:22px; background:var(--card); border:1px solid var(--line); border-radius:4px; padding:28px; box-shadow:0 10px 30px rgba(42,35,26,.04); }
 .agenda-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; padding-bottom:22px; border-bottom:1px solid var(--line); }
 .agenda-heading h2,.manager-heading h2 { margin:4px 0 0; font-family:var(--font-serif),serif; font-size:28px; }
@@ -154,7 +159,7 @@ footer p { margin:0; }
   .hero { grid-template-columns:1fr; gap:30px; padding-block:50px; }
   .media-market { grid-template-columns:1fr; }
   .currency-card,.youtube-card { height:auto; }
-  .chart-frame,.market-only .chart-frame { height:340px; min-height:0; aspect-ratio:auto; }
+  .chart-frame,.market-only .chart-frame { height:420px; min-height:0; aspect-ratio:auto; }
   .form-intro { grid-template-columns:1fr; gap:10px; }
 }
 @media (max-width:580px) {
@@ -181,7 +186,8 @@ footer p { margin:0; }
   .card-heading { display:block; }
   .verified,.market-live { margin-top:8px; }
   .event-meta { grid-template-columns:1fr; }
-  .chart-frame,.market-only .chart-frame { height:300px; }
+  .market-tabs { gap:20px; margin-inline:-2px; }
+  .chart-frame,.market-only .chart-frame { height:390px; }
   .editor form { padding:22px 18px; }
   .form-grid { grid-template-columns:1fr; }
   .form-grid .wide { grid-column:auto; }

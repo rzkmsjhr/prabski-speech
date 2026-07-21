@@ -9,6 +9,8 @@ type Statement = {
 
 type Database = { prepare: (query: string) => Statement };
 
+type ColumnRow = { name: string };
+
 type SpeechRow = {
   id: number;
   title: string;
@@ -60,6 +62,16 @@ async function database() {
   const db = bindings().DB;
   if (!db) throw new Error("Database belum tersedia.");
   await db.prepare(schema).run();
+  const existingColumns = await db.prepare("PRAGMA table_info(speech_schedule)").all<ColumnRow>();
+  const columnNames = new Set(existingColumns.results.map((column) => column.name));
+  const additions = [
+    ["latitude", "ALTER TABLE speech_schedule ADD COLUMN latitude REAL NOT NULL DEFAULT 0"],
+    ["longitude", "ALTER TABLE speech_schedule ADD COLUMN longitude REAL NOT NULL DEFAULT 0"],
+    ["youtube_url", "ALTER TABLE speech_schedule ADD COLUMN youtube_url TEXT NOT NULL DEFAULT ''"],
+  ] as const;
+  for (const [column, sql] of additions) {
+    if (!columnNames.has(column)) await db.prepare(sql).run();
+  }
   return db;
 }
 
@@ -145,7 +157,8 @@ export async function POST(request: Request) {
       .first<SpeechRow>();
     if (!row) throw new Error();
     return Response.json({ speech: serialize(row) }, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.error("Unable to create speech schedule", error);
     return Response.json({ error: "Jadwal belum dapat disimpan." }, { status: 500 });
   }
 }
@@ -167,7 +180,8 @@ export async function PUT(request: Request) {
       .first<SpeechRow>();
     if (!row) return Response.json({ error: "Jadwal tidak ditemukan." }, { status: 404 });
     return Response.json({ speech: serialize(row) });
-  } catch {
+  } catch (error) {
+    console.error("Unable to update speech schedule", error);
     return Response.json({ error: "Jadwal belum dapat diperbarui." }, { status: 500 });
   }
 }
@@ -180,7 +194,8 @@ export async function DELETE(request: Request) {
     const db = await database();
     await db.prepare("DELETE FROM speech_schedule WHERE id = ?").bind(id).run();
     return Response.json({ ok: true });
-  } catch {
+  } catch (error) {
+    console.error("Unable to delete speech schedule", error);
     return Response.json({ error: "Jadwal belum dapat dihapus." }, { status: 500 });
   }
 }
