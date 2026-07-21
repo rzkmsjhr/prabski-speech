@@ -11,5 +11,6 @@ export const speechSchedule = sqliteTable("speech_schedule", {
   sourceUrl: text("source_url").notNull().default(""),
   latitude: real("latitude").notNull().default(0),
   longitude: real("longitude").notNull().default(0),
+  youtubeUrl: text("youtube_url").notNull().default(""),
   updatedAt: text("updated_at").notNull(),
 });

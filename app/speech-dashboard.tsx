@@ -12,6 +12,7 @@ type Speech = {
   sourceUrl: string;
   latitude: number;
   longitude: number;
+  youtubeUrl: string;
   updatedAt: string;
 };
 
@@ -27,6 +28,7 @@ type FormState = {
   sourceUrl: string;
   latitude: string;
   longitude: string;
+  youtubeUrl: string;
 };
 
 const initialForm: FormState = {
@@ -41,6 +43,7 @@ const initialForm: FormState = {
   sourceUrl: "",
   latitude: "",
   longitude: "",
+  youtubeUrl: "",
 };
 
 const zoneOffsets: Record<string, string> = {
@@ -81,6 +84,54 @@ function countdown(target: string, now: number) {
   const minutes = Math.floor((difference / 60_000) % 60);
   const seconds = Math.floor((difference / 1_000) % 60);
   return { days, hours, minutes, seconds, passed: difference === 0 };
+}
+
+function dateFields(value: string, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone,
+  }).formatToParts(new Date(value));
+  const part = (name: string) => parts.find((item) => item.type === name)?.value || "";
+  return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
+}
+
+function formFromSpeech(speech: Speech, adminKey = ""): FormState {
+  const dateTime = dateFields(speech.startsAt, speech.timeZone);
+  return {
+    adminKey,
+    title: speech.title,
+    venue: speech.venue,
+    city: speech.city,
+    date: dateTime.date,
+    time: dateTime.time,
+    timeZone: speech.timeZone,
+    notes: speech.notes,
+    sourceUrl: speech.sourceUrl,
+    latitude: String(speech.latitude),
+    longitude: String(speech.longitude),
+    youtubeUrl: speech.youtubeUrl,
+  };
+}
+
+function youtubeVideoId(url: string) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return parsed.pathname.split("/").filter(Boolean)[0] || "";
+    if (host !== "youtube.com" && host !== "m.youtube.com") return "";
+    if (parsed.searchParams.get("v")) return parsed.searchParams.get("v") || "";
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (["live", "embed", "shorts"].includes(parts[0])) return parts[1] || "";
+  } catch {
+    return "";
+  }
+  return "";
 }
 
 function TradingViewChart() {
@@ -151,6 +202,32 @@ function SpeechMap({ speech }: { speech: Speech | null }) {
   );
 }
 
+function YouTubeLive({ url }: { url: string }) {
+  const videoId = youtubeVideoId(url);
+  if (!videoId) return null;
+  return (
+    <section className="youtube-section shell" aria-label="Siaran langsung YouTube">
+      <article className="youtube-card">
+        <div className="card-heading youtube-heading">
+          <div>
+            <p className="section-kicker">SIARAN RESMI</p>
+            <h2>YouTube Live</h2>
+          </div>
+          <span className="youtube-live"><i /> LIVE STREAM</span>
+        </div>
+        <div className="youtube-frame">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`}
+            title="Siaran langsung pidato di YouTube"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
+      </article>
+    </section>
+  );
+}
+
 export function SpeechDashboard() {
   const [speech, setSpeech] = useState<Speech | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,6 +241,9 @@ export function SpeechDashboard() {
       const response = await fetch("/api/speech", { cache: "no-store" });
       const data = (await response.json()) as { speech: Speech | null };
       setSpeech(data.speech);
+      if (data.speech) {
+        setForm((current) => formFromSpeech(data.speech as Speech, current.adminKey));
+      }
     } catch {
       setMessage("Jadwal belum dapat dimuat. Coba segarkan halaman.");
     } finally {
@@ -208,12 +288,13 @@ export function SpeechDashboard() {
           sourceUrl: form.sourceUrl,
           latitude: Number(form.latitude),
           longitude: Number(form.longitude),
+          youtubeUrl: form.youtubeUrl,
         }),
       });
       const data = (await response.json()) as { speech?: Speech; error?: string };
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan jadwal.");
       setSpeech(data.speech || null);
-      setForm((current) => ({ ...initialForm, adminKey: current.adminKey }));
+      if (data.speech) setForm((current) => formFromSpeech(data.speech as Speech, current.adminKey));
       setMessage("Jadwal berhasil diterbitkan.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Gagal menyimpan jadwal.");
@@ -236,6 +317,7 @@ export function SpeechDashboard() {
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Gagal menghapus jadwal.");
       setSpeech(null);
+      setForm((current) => ({ ...initialForm, adminKey: current.adminKey }));
       setMessage("Jadwal telah dikosongkan.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Gagal menghapus jadwal.");
@@ -334,11 +416,16 @@ export function SpeechDashboard() {
         </article>
       </section>
 
+      {speech?.youtubeUrl && <YouTubeLive url={speech.youtubeUrl} />}
+
       <section className="editor shell">
         <details>
           <summary><span><b>＋</b> Kelola jadwal pidato</span><small>KHUSUS ADMIN</small></summary>
           <form onSubmit={submitSpeech}>
-            <div className="form-intro"><h2>Terbitkan agenda berikutnya</h2><p>Isi data yang sudah Anda verifikasi. Jadwal terakhir akan langsung menggantikan jadwal sebelumnya.</p></div>
+            <div className="form-intro">
+              <div><h2>{speech ? "Edit agenda aktif" : "Terbitkan agenda berikutnya"}</h2>{speech && <button className="load-current" type="button" onClick={() => setForm((current) => formFromSpeech(speech, current.adminKey))}>Muat ulang data aktif</button>}</div>
+              <p>{speech ? "Data aktif sudah dimuat ke formulir. Ubah bagian yang diperlukan, lalu tekan Terbitkan jadwal untuk memperbaruinya." : "Isi data yang sudah Anda verifikasi. Jadwal terakhir akan langsung menggantikan jadwal sebelumnya."}</p>
+            </div>
             <div className="form-grid">
               <label className="wide">Kunci admin<input type="password" value={form.adminKey} onChange={(e) => updateField("adminKey", e.target.value)} autoComplete="current-password" required /></label>
               <label className="wide">Judul / agenda pidato<input value={form.title} onChange={(e) => updateField("title", e.target.value)} placeholder="Contoh: Pidato Kenegaraan" required maxLength={140} /></label>
@@ -350,6 +437,7 @@ export function SpeechDashboard() {
               <label>Tautan sumber (opsional)<input type="url" value={form.sourceUrl} onChange={(e) => updateField("sourceUrl", e.target.value)} placeholder="https://…" /></label>
               <label>Latitude<input type="number" step="any" min="-90" max="90" value={form.latitude} onChange={(e) => updateField("latitude", e.target.value)} placeholder="-6.1754" required /></label>
               <label>Longitude<input type="number" step="any" min="-180" max="180" value={form.longitude} onChange={(e) => updateField("longitude", e.target.value)} placeholder="106.8272" required /></label>
+              <label className="wide">Tautan YouTube Live (opsional)<input type="url" value={form.youtubeUrl} onChange={(e) => updateField("youtubeUrl", e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /><small className="field-help">Kosongkan agar bagian siaran langsung tidak ditampilkan.</small></label>
               <label className="wide">Catatan (opsional)<textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Informasi akses, siaran, atau konteks singkat" maxLength={500} /></label>
             </div>
             <div className="form-actions"><button className="primary" disabled={saving}>{saving ? "Menyimpan…" : "Terbitkan jadwal"}</button><button className="secondary" type="button" disabled={saving || !speech} onClick={clearSpeech}>Kosongkan jadwal</button>{message && <p role="status">{message}</p>}</div>

@@ -1,0 +1,1 @@
+ALTER TABLE `speech_schedule` ADD `youtube_url` text DEFAULT '' NOT NULL;
