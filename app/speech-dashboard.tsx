@@ -285,7 +285,7 @@ function YouTubeLive({ url, title }: { url: string; title: string }) {
   );
 }
 
-export function SpeechDashboard() {
+export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) {
   const [speeches, setSpeeches] = useState<Speech[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -293,6 +293,10 @@ export function SpeechDashboard() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [adminKeyInput, setAdminKeyInput] = useState("");
+  const [adminValidated, setAdminValidated] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+  const [validating, setValidating] = useState(false);
 
   async function loadSpeeches() {
     try {
@@ -320,6 +324,26 @@ export function SpeechDashboard() {
 
   function updateField(name: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  async function validateAdmin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setValidating(true);
+    setAuthMessage("");
+    try {
+      const response = await fetch("/api/speech/validate", {
+        method: "POST",
+        headers: { "x-admin-key": adminKeyInput },
+      });
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) throw new Error(data.error || "Kunci admin tidak valid.");
+      setForm((current) => ({ ...current, adminKey: adminKeyInput }));
+      setAdminValidated(true);
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Kunci admin tidak valid.");
+    } finally {
+      setValidating(false);
+    }
   }
 
   async function submitSpeech(event: FormEvent<HTMLFormElement>) {
@@ -396,6 +420,73 @@ export function SpeechDashboard() {
     } finally {
       setSaving(false);
     }
+  }
+
+  const managerPanel = (
+    <section className="editor editor-page shell">
+      <div className="editor-page-bar"><span><b>＋</b> Kelola semua jadwal</span><small>KHUSUS ADMIN</small></div>
+      <form onSubmit={submitSpeech}>
+        <div className="schedule-manager">
+          <div className="manager-heading"><div><p className="section-kicker">DATA TERSIMPAN</p><h2>{speeches.length} jadwal</h2></div><button type="button" className="primary compact" onClick={beginCreate}>＋ Tambah baru</button></div>
+          <div className="manager-list">
+            {speeches.length ? speeches.map((item) => <div className={`manager-row ${editingId === item.id ? "is-editing" : ""}`} key={item.id}><div><strong>{item.title}</strong><span>{formatDate(item.startsAt, item.timeZone)} · {formatTime(item.startsAt, item.timeZone)} {zoneLabels[item.timeZone] || ""} · {item.city}</span></div><div><button type="button" onClick={() => beginEdit(item)}>Edit</button><button type="button" className="danger" onClick={() => deleteSpeech(item)} disabled={saving}>Hapus</button></div></div>) : <p className="manager-empty">Belum ada jadwal tersimpan.</p>}
+          </div>
+        </div>
+        <div className="form-intro">
+          <div><h2>{editingId ? "Edit jadwal" : "Tambah jadwal baru"}</h2>{editingId && <button className="load-current" type="button" onClick={() => { const item = speeches.find((entry) => entry.id === editingId); if (item) beginEdit(item); }}>Muat ulang data</button>}</div>
+          <p>{editingId ? "Ubah data yang diperlukan, lalu simpan untuk memperbarui jadwal ini." : "Isi satu agenda. Setelah tersimpan, Anda dapat menambah agenda berikutnya tanpa mengganti data sebelumnya."}</p>
+        </div>
+        <div className="form-grid">
+          <label className="wide">Judul / agenda pidato<input value={form.title} onChange={(e) => updateField("title", e.target.value)} placeholder="Contoh: Pidato Kenegaraan" required maxLength={140} /></label>
+          <label>Nama tempat<input value={form.venue} onChange={(e) => updateField("venue", e.target.value)} placeholder="Gedung / alun-alun" required maxLength={120} /></label>
+          <label>Kota / provinsi<input value={form.city} onChange={(e) => updateField("city", e.target.value)} placeholder="Jakarta" required maxLength={120} /></label>
+          <label>Tanggal<input type="date" value={form.date} onChange={(e) => updateField("date", e.target.value)} required /></label>
+          <label>Waktu<input type="time" value={form.time} onChange={(e) => updateField("time", e.target.value)} required /></label>
+          <label>Zona waktu<select value={form.timeZone} onChange={(e) => updateField("timeZone", e.target.value)}><option value="Asia/Jakarta">WIB (UTC+7)</option><option value="Asia/Makassar">WITA (UTC+8)</option><option value="Asia/Jayapura">WIT (UTC+9)</option></select></label>
+          <label>Tautan sumber (opsional)<input type="url" value={form.sourceUrl} onChange={(e) => updateField("sourceUrl", e.target.value)} placeholder="https://…" /></label>
+          <label>Latitude<input type="number" step="any" min="-90" max="90" value={form.latitude} onChange={(e) => updateField("latitude", e.target.value)} placeholder="-6.1754" required /></label>
+          <label>Longitude<input type="number" step="any" min="-180" max="180" value={form.longitude} onChange={(e) => updateField("longitude", e.target.value)} placeholder="106.8272" required /></label>
+          <label className="wide">Tautan YouTube Live (opsional)<input type="url" value={form.youtubeUrl} onChange={(e) => updateField("youtubeUrl", e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /><small className="field-help">Kosongkan agar bagian siaran langsung tidak ditampilkan.</small></label>
+          <label className="wide">Catatan (opsional)<textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Informasi akses, siaran, atau konteks singkat" maxLength={500} /></label>
+        </div>
+        <div className="form-actions"><button className="primary" disabled={saving}>{saving ? "Menyimpan…" : editingId ? "Simpan perubahan" : "Tambahkan jadwal"}</button>{editingId && <button className="secondary" type="button" disabled={saving} onClick={beginCreate}>Batal edit</button>}{message && <p role="status">{message}</p>}</div>
+      </form>
+    </section>
+  );
+
+  if (adminMode && !adminValidated) {
+    return (
+      <main className="admin-access-page">
+        <div className="top-rule" />
+        <header className="masthead shell">
+          <a className="brand" href="/" aria-label="Kembali ke dasbor"><span className="brand-mark">PS</span><span><strong>Prabowo Speech Watch</strong><small>Panel input data</small></span></a>
+        </header>
+        <section className="admin-gate shell" aria-label="Validasi admin">
+          <form onSubmit={validateAdmin}>
+            <p className="section-kicker">AKSES ADMIN</p>
+            <h1>Masukkan kunci admin</h1>
+            <p>Kunci hanya digunakan untuk sesi halaman ini dan tidak disimpan di browser.</p>
+            <label>Kunci admin<input type="password" value={adminKeyInput} onChange={(event) => setAdminKeyInput(event.target.value)} autoComplete="current-password" autoFocus required /></label>
+            <button className="primary" disabled={validating}>{validating ? "Memeriksa…" : "Lanjutkan"}</button>
+            {authMessage && <p className="auth-error" role="alert">{authMessage}</p>}
+          </form>
+        </section>
+      </main>
+    );
+  }
+
+  if (adminMode) {
+    return (
+      <main>
+        <div className="top-rule" />
+        <header className="masthead shell">
+          <a className="brand" href="/" aria-label="Kembali ke dasbor"><span className="brand-mark">PS</span><span><strong>Prabowo Speech Watch</strong><small>Panel input data</small></span></a>
+          <a className="back-link" href="/">KEMBALI KE DASBOR</a>
+        </header>
+        {managerPanel}
+        <footer className="shell"><p><strong>Prabowo Speech Watch</strong> — panel pengelolaan agenda.</p></footer>
+      </main>
+    );
   }
 
   return (
@@ -497,38 +588,7 @@ export function SpeechDashboard() {
         {past.length > 0 && <details className="past-agenda"><summary>Lihat {past.length} agenda yang telah selesai</summary><div className="agenda-list past-list">{past.map((item) => <AgendaRow key={item.id} speech={item} label="SELESAI" />)}</div></details>}
       </section>
 
-      <section className="editor shell">
-        <details>
-          <summary><span><b>＋</b> Kelola semua jadwal</span><small>KHUSUS ADMIN</small></summary>
-          <form onSubmit={submitSpeech}>
-            <div className="schedule-manager">
-              <div className="manager-heading"><div><p className="section-kicker">DATA TERSIMPAN</p><h2>{speeches.length} jadwal</h2></div><button type="button" className="primary compact" onClick={beginCreate}>＋ Tambah baru</button></div>
-              <div className="manager-list">
-                {speeches.length ? speeches.map((item) => <div className={`manager-row ${editingId === item.id ? "is-editing" : ""}`} key={item.id}><div><strong>{item.title}</strong><span>{formatDate(item.startsAt, item.timeZone)} · {formatTime(item.startsAt, item.timeZone)} {zoneLabels[item.timeZone] || ""} · {item.city}</span></div><div><button type="button" onClick={() => beginEdit(item)}>Edit</button><button type="button" className="danger" onClick={() => deleteSpeech(item)} disabled={saving}>Hapus</button></div></div>) : <p className="manager-empty">Belum ada jadwal tersimpan.</p>}
-              </div>
-            </div>
-            <div className="form-intro">
-              <div><h2>{editingId ? "Edit jadwal" : "Tambah jadwal baru"}</h2>{editingId && <button className="load-current" type="button" onClick={() => { const item = speeches.find((entry) => entry.id === editingId); if (item) beginEdit(item); }}>Muat ulang data</button>}</div>
-              <p>{editingId ? "Ubah data yang diperlukan, lalu simpan untuk memperbarui jadwal ini." : "Isi satu agenda. Setelah tersimpan, Anda dapat menambah agenda berikutnya tanpa mengganti data sebelumnya."}</p>
-            </div>
-            <div className="form-grid">
-              <label className="wide">Kunci admin<input type="password" value={form.adminKey} onChange={(e) => updateField("adminKey", e.target.value)} autoComplete="current-password" required /></label>
-              <label className="wide">Judul / agenda pidato<input value={form.title} onChange={(e) => updateField("title", e.target.value)} placeholder="Contoh: Pidato Kenegaraan" required maxLength={140} /></label>
-              <label>Nama tempat<input value={form.venue} onChange={(e) => updateField("venue", e.target.value)} placeholder="Gedung / alun-alun" required maxLength={120} /></label>
-              <label>Kota / provinsi<input value={form.city} onChange={(e) => updateField("city", e.target.value)} placeholder="Jakarta" required maxLength={120} /></label>
-              <label>Tanggal<input type="date" value={form.date} onChange={(e) => updateField("date", e.target.value)} required /></label>
-              <label>Waktu<input type="time" value={form.time} onChange={(e) => updateField("time", e.target.value)} required /></label>
-              <label>Zona waktu<select value={form.timeZone} onChange={(e) => updateField("timeZone", e.target.value)}><option value="Asia/Jakarta">WIB (UTC+7)</option><option value="Asia/Makassar">WITA (UTC+8)</option><option value="Asia/Jayapura">WIT (UTC+9)</option></select></label>
-              <label>Tautan sumber (opsional)<input type="url" value={form.sourceUrl} onChange={(e) => updateField("sourceUrl", e.target.value)} placeholder="https://…" /></label>
-              <label>Latitude<input type="number" step="any" min="-90" max="90" value={form.latitude} onChange={(e) => updateField("latitude", e.target.value)} placeholder="-6.1754" required /></label>
-              <label>Longitude<input type="number" step="any" min="-180" max="180" value={form.longitude} onChange={(e) => updateField("longitude", e.target.value)} placeholder="106.8272" required /></label>
-              <label className="wide">Tautan YouTube Live (opsional)<input type="url" value={form.youtubeUrl} onChange={(e) => updateField("youtubeUrl", e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /><small className="field-help">Kosongkan agar bagian siaran langsung tidak ditampilkan.</small></label>
-              <label className="wide">Catatan (opsional)<textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Informasi akses, siaran, atau konteks singkat" maxLength={500} /></label>
-            </div>
-            <div className="form-actions"><button className="primary" disabled={saving}>{saving ? "Menyimpan…" : editingId ? "Simpan perubahan" : "Tambahkan jadwal"}</button>{editingId && <button className="secondary" type="button" disabled={saving} onClick={beginCreate}>Batal edit</button>}{message && <p role="status">{message}</p>}</div>
-          </form>
-        </details>
-      </section>
+      <section className="editor-link shell"><a href="/input-data"><span><b>＋</b> Kelola semua jadwal</span><small>KHUSUS ADMIN →</small></a></section>
 
       <footer className="shell"><p><strong>Prabowo Speech Watch</strong> — pembaruan agenda dimasukkan secara manual.</p><p>Kurs bersifat informatif, bukan saran finansial.</p></footer>
     </main>
