@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "prabski-speech",
+  "account_id": "60d643eb70c68042348b99d79436a393",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-07-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "prabski-speech-db",
+      "database_id": "85bcb688-f5ca-42bb-8d10-30927663995e",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}

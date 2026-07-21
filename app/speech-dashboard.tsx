@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Speech = {
@@ -289,7 +290,7 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
   const [speeches, setSpeeches] = useState<Speech[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   const [form, setForm] = useState<FormState>(initialForm);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -311,9 +312,14 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
   }
 
   useEffect(() => {
-    loadSpeeches();
+    const initialLoad = window.setTimeout(() => void loadSpeeches(), 0);
+    const initialClock = window.setTimeout(() => setNow(Date.now()), 0);
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearTimeout(initialClock);
+      window.clearInterval(timer);
+    };
   }, []);
 
   const upcoming = useMemo(() => speeches.filter((item) => new Date(item.startsAt).getTime() >= now), [speeches, now]);
@@ -459,7 +465,7 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
       <main className="admin-access-page">
         <div className="top-rule" />
         <header className="masthead shell">
-          <a className="brand" href="/" aria-label="Kembali ke dasbor"><span className="brand-mark">PS</span><span><strong>Prabowo Speech Watch</strong><small>Panel input data</small></span></a>
+          <Link className="brand" href="/" aria-label="Kembali ke dasbor"><span className="brand-mark">PS</span><span><strong>Prabowo Speech Watch</strong><small>Panel input data</small></span></Link>
         </header>
         <section className="admin-gate shell" aria-label="Validasi admin">
           <form onSubmit={validateAdmin}>
@@ -480,8 +486,8 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
       <main>
         <div className="top-rule" />
         <header className="masthead shell">
-          <a className="brand" href="/" aria-label="Kembali ke dasbor"><span className="brand-mark">PS</span><span><strong>Prabowo Speech Watch</strong><small>Panel input data</small></span></a>
-          <a className="back-link" href="/">KEMBALI KE DASBOR</a>
+          <Link className="brand" href="/" aria-label="Kembali ke dasbor"><span className="brand-mark">PS</span><span><strong>Prabowo Speech Watch</strong><small>Panel input data</small></span></Link>
+          <Link className="back-link" href="/">KEMBALI KE DASBOR</Link>
         </header>
         {managerPanel}
         <footer className="shell"><p><strong>Prabowo Speech Watch</strong> — panel pengelolaan agenda.</p></footer>
