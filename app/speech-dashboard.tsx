@@ -144,35 +144,19 @@ function TradingViewChart() {
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
     const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
     script.async = true;
     script.textContent = JSON.stringify({
       autosize: true,
-      symbols: [["Dolar AS / Rupiah", "FX_IDC:USDIDR|1D"]],
+      symbol: "FX_IDC:USDIDR",
       chartOnly: false,
       width: "100%",
       height: "100%",
       locale: "id",
       colorTheme: "light",
-      backgroundColor: "#fffdf7",
-      gridColor: "rgba(27, 36, 31, 0.07)",
-      widgetFontColor: "#18211d",
-      fontColor: "#65716a",
-      chartType: "area",
-      lineColor: "#b91f2e",
-      topColor: "rgba(185, 31, 46, 0.18)",
-      bottomColor: "rgba(185, 31, 46, 0.02)",
-      lineWidth: 2,
-      showVolume: false,
-      showMA: false,
-      hideDateRanges: false,
-      hideMarketStatus: false,
-      hideSymbolLogo: false,
-      scalePosition: "right",
-      scaleMode: "Normal",
-      valuesTracking: "1",
-      changeMode: "price-and-percent",
-      dateRanges: ["1d|5", "1m|30", "3m|60", "12m|1D", "all|1M"],
+      isTransparent: true,
+      dateRange: "1M",
+      noTimeScale: false,
     });
     container.current.append(widget, script);
   }, []);
@@ -252,16 +236,15 @@ function AgendaRow({ speech, label }: { speech: Speech; label?: string }) {
   );
 }
 
-function YouTubeLive({ url }: { url: string }) {
+function YouTubeLive({ url, title }: { url: string; title: string }) {
   const videoId = youtubeVideoId(url);
   if (!videoId) return null;
   return (
-    <section className="youtube-section shell" aria-label="Siaran langsung YouTube">
-      <article className="youtube-card">
+      <article className="youtube-card" aria-label="Siaran langsung YouTube">
         <div className="card-heading youtube-heading">
           <div>
             <p className="section-kicker">SIARAN RESMI</p>
-            <h2>YouTube Live</h2>
+            <h2>{title}</h2>
           </div>
           <span className="youtube-live"><i /> LIVE STREAM</span>
         </div>
@@ -274,7 +257,6 @@ function YouTubeLive({ url }: { url: string }) {
           />
         </div>
       </article>
-    </section>
   );
 }
 
@@ -411,7 +393,36 @@ export function SpeechDashboard() {
           <h1>Pidato berikutnya.<br /><em>Satu pandangan.</em></h1>
           <p className="lede">Jadwal, lokasi, hitung mundur, dan pergerakan Rupiah—diringkas dalam satu layar yang tenang dan mudah dibaca.</p>
         </div>
-        <div className="flag-panel" aria-hidden="true"><span>08</span><b>INDONESIA</b></div>
+        <article className="hero-next" aria-label="Pidato selanjutnya">
+          <div className="hero-next-heading">
+            <p className="section-kicker">PIDATO SELANJUTNYA</p>
+            <span className="verified">TERVERIFIKASI MANUAL</span>
+          </div>
+          {loading ? (
+            <div className="hero-next-empty"><span className="loader" /> Memuat jadwal…</div>
+          ) : nextSpeech ? (
+            <div className="hero-next-content">
+              <p className="event-date">{formatDate(nextSpeech.startsAt, nextSpeech.timeZone)}</p>
+              <h2>{nextSpeech.title}</h2>
+              <div className="hero-next-meta">
+                <strong>{formatTime(nextSpeech.startsAt, nextSpeech.timeZone)} {zoneLabels[nextSpeech.timeZone] || ""}</strong>
+                <span>{nextSpeech.venue} · {nextSpeech.city}</span>
+              </div>
+              {remaining && !remaining.passed && (
+                <div className="hero-countdown" aria-label="Hitung mundur menuju acara">
+                  {[
+                    [remaining.days, "HARI"],
+                    [remaining.hours, "JAM"],
+                    [remaining.minutes, "MENIT"],
+                    [remaining.seconds, "DETIK"],
+                  ].map(([value, label]) => <div key={String(label)}><strong>{String(value).padStart(2, "0")}</strong><span>{label}</span></div>)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="hero-next-empty">Belum ada agenda mendatang.</div>
+          )}
+        </article>
       </section>
 
       <section className="map-section shell" aria-label="Peta lokasi pidato">
@@ -427,47 +438,8 @@ export function SpeechDashboard() {
         </article>
       </section>
 
-      <section className="dashboard shell" aria-label="Ringkasan utama">
-        <article className="speech-card">
-          <div className="card-heading">
-            <div>
-              <p className="section-kicker">AGENDA TERDEKAT</p>
-              <h2>Pidato selanjutnya</h2>
-            </div>
-            <span className="verified">● TERVERIFIKASI MANUAL</span>
-          </div>
-
-          {loading ? (
-            <div className="empty-state"><span className="loader" /> Memuat jadwal…</div>
-          ) : nextSpeech ? (
-            <div className="event-content">
-              <p className="event-date">{formatDate(nextSpeech.startsAt, nextSpeech.timeZone)}</p>
-              <h3>{nextSpeech.title}</h3>
-              <div className="event-meta">
-                <div><span>WAKTU</span><strong>{formatTime(nextSpeech.startsAt, nextSpeech.timeZone)} {zoneLabels[nextSpeech.timeZone] || ""}</strong></div>
-                <div><span>LOKASI</span><strong>{nextSpeech.venue}</strong><small>{nextSpeech.city}</small></div>
-              </div>
-              {nextSpeech.notes && <p className="event-notes">{nextSpeech.notes}</p>}
-              {nextSpeech.sourceUrl && <a className="source-link" href={nextSpeech.sourceUrl} target="_blank" rel="noreferrer">Lihat sumber jadwal ↗</a>}
-              {remaining && (
-                <div className="countdown" aria-label="Hitung mundur menuju acara">
-                  {remaining.passed ? <p className="event-started">Waktu acara telah tiba</p> : [
-                    [remaining.days, "HARI"],
-                    [remaining.hours, "JAM"],
-                    [remaining.minutes, "MENIT"],
-                    [remaining.seconds, "DETIK"],
-                  ].map(([value, label]) => <div key={String(label)}><strong>{String(value).padStart(2, "0")}</strong><span>{label}</span></div>)}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="empty-state no-event">
-              <span className="calendar-icon">—</span>
-              <div><strong>Belum ada agenda mendatang</strong><p>Tambahkan jadwal baru melalui panel pengelolaan di bawah.</p></div>
-            </div>
-          )}
-        </article>
-
+      <section className={`media-market shell ${streamingSpeech ? "" : "market-only"}`} aria-label="Siaran dan pasar valuta asing">
+        {streamingSpeech && <YouTubeLive url={streamingSpeech.youtubeUrl} title={streamingSpeech.title} />}
         <article className="currency-card">
           <div className="card-heading">
             <div>
@@ -491,8 +463,6 @@ export function SpeechDashboard() {
         </div>
         {past.length > 0 && <details className="past-agenda"><summary>Lihat {past.length} agenda yang telah selesai</summary><div className="agenda-list past-list">{past.map((item) => <AgendaRow key={item.id} speech={item} label="SELESAI" />)}</div></details>}
       </section>
-
-      {streamingSpeech && <YouTubeLive url={streamingSpeech.youtubeUrl} />}
 
       <section className="editor shell">
         <details>
