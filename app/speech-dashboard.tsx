@@ -178,7 +178,7 @@ function TradingViewChart() {
       bottomColor: "rgba(255, 53, 69, 0.02)",
       lineWidth: 2,
       lineType: 0,
-      dateRanges: ["1d|5", "5d|15", "1m|60", "6m|1D", "12m|1D", "60m|1W", "120m|1W", "all|1M"],
+      dateRanges: ["1d|1", "5d|15", "1m|60", "6m|1D", "12m|1D", "60m|1W", "120m|1W", "all|1M"],
     });
     container.current.append(widget, script);
   }, []);
