@@ -588,8 +588,6 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
         {past.length > 0 && <details className="past-agenda"><summary>Lihat {past.length} agenda yang telah selesai</summary><div className="agenda-list past-list">{past.map((item) => <AgendaRow key={item.id} speech={item} label="SELESAI" />)}</div></details>}
       </section>
 
-      <section className="editor-link shell"><a href="/input-data"><span><b>＋</b> Kelola semua jadwal</span><small>KHUSUS ADMIN →</small></a></section>
-
       <footer className="shell"><p><strong>Prabowo Speech Watch</strong> — pembaruan agenda dimasukkan secara manual.</p><p>Kurs bersifat informatif, bukan saran finansial.</p></footer>
     </main>
   );

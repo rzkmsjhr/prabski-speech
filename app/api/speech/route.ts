@@ -7,9 +7,13 @@ type Statement = {
   run: () => Promise<unknown>;
 };
 
-type Database = { prepare: (query: string) => Statement };
+type Database = {
+  prepare: (query: string) => Statement;
+  batch: (statements: Statement[]) => Promise<unknown>;
+};
 
 type ColumnRow = { name: string };
+type TableDefinition = { sql: string | null };
 
 type SpeechRow = {
   id: number;
@@ -58,7 +62,9 @@ function bindings() {
   return env as unknown as { DB?: Database; ADMIN_KEY?: string };
 }
 
-async function database() {
+let databaseReady: Promise<Database> | null = null;
+
+async function initializeDatabase() {
   const db = bindings().DB;
   if (!db) throw new Error("Database belum tersedia.");
   await db.prepare(schema).run();
@@ -72,7 +78,43 @@ async function database() {
   for (const [column, sql] of additions) {
     if (!columnNames.has(column)) await db.prepare(sql).run();
   }
+  const definition = await db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'speech_schedule'").first<TableDefinition>();
+  if (definition?.sql && /CHECK\s*\(\s*id\s*=\s*1\s*\)/i.test(definition.sql)) {
+    await db.batch([
+      db.prepare("DROP TABLE IF EXISTS speech_schedule_repaired"),
+      db.prepare(`CREATE TABLE speech_schedule_repaired (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        venue TEXT NOT NULL,
+        city TEXT NOT NULL,
+        starts_at TEXT NOT NULL,
+        time_zone TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        source_url TEXT NOT NULL DEFAULT '',
+        latitude REAL NOT NULL DEFAULT 0,
+        longitude REAL NOT NULL DEFAULT 0,
+        youtube_url TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      )`),
+      db.prepare(`INSERT INTO speech_schedule_repaired
+        (id, title, venue, city, starts_at, time_zone, notes, source_url, latitude, longitude, youtube_url, updated_at)
+        SELECT id, title, venue, city, starts_at, time_zone, notes, source_url, latitude, longitude, youtube_url, updated_at
+        FROM speech_schedule`),
+      db.prepare("DROP TABLE speech_schedule"),
+      db.prepare("ALTER TABLE speech_schedule_repaired RENAME TO speech_schedule"),
+    ]);
+  }
   return db;
+}
+
+function database() {
+  if (!databaseReady) {
+    databaseReady = initializeDatabase().catch((error) => {
+      databaseReady = null;
+      throw error;
+    });
+  }
+  return databaseReady;
 }
 
 function serialize(row: SpeechRow) {
