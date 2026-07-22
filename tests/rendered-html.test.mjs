@@ -65,6 +65,9 @@ test("YouTube live monitoring keeps manual and channel videos independent", asyn
   assert.match(dashboard, /VIDEO PIDATO/);
   assert.match(dashboard, /LIVE SEKRETARIAT PRESIDEN/);
   assert.match(dashboard, /hasYouTube/);
+  assert.match(dashboard, /TRADINGVIEW_DEFAULT_RANGE = "5D"/);
+  assert.match(dashboard, /TRADINGVIEW_DEFAULT_INTERVAL = "1"/);
+  assert.doesNotMatch(dashboard, /"1d\|1"/);
   assert.match(liveRoute, /SekretariatPresiden/);
   assert.match(liveRoute, /liveBroadcastContent === "live"/);
   assert.match(liveRoute, /YOUTUBE_API_KEY/);

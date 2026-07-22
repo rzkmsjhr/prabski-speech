@@ -144,6 +144,9 @@ function youtubeVideoId(url: string) {
   return "";
 }
 
+const TRADINGVIEW_DEFAULT_RANGE = "5D";
+const TRADINGVIEW_DEFAULT_INTERVAL = "1";
+
 function TradingViewChart() {
   const container = useRef<HTMLDivElement>(null);
 
@@ -157,7 +160,7 @@ function TradingViewChart() {
     script.async = true;
     script.textContent = JSON.stringify({
       autosize: true,
-      symbols: [["USD / IDR", "FX_IDC:USDIDR|1D"]],
+      symbols: [["USD / IDR", `FX_IDC:USDIDR|${TRADINGVIEW_DEFAULT_RANGE}`]],
       chartOnly: true,
       width: "100%",
       height: "100%",
@@ -186,7 +189,7 @@ function TradingViewChart() {
       bottomColor: "rgba(255, 53, 69, 0.02)",
       lineWidth: 2,
       lineType: 0,
-      dateRanges: ["1d|1", "5d|15", "1m|60", "6m|1D", "12m|1D", "60m|1W", "120m|1W", "all|1M"],
+      dateRanges: [`5d|${TRADINGVIEW_DEFAULT_INTERVAL}`, "1m|60", "6m|1D", "12m|1D", "60m|1W", "120m|1W", "all|1M"],
     });
     container.current.append(widget, script);
   }, []);
