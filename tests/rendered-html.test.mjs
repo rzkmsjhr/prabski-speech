@@ -32,3 +32,21 @@ test("public and admin routes use the intended dashboard modes", async () => {
   assert.match(apiRoute, /bindings\(\)\.DB/);
   assert.match(apiRoute, /x-admin-key/);
 });
+
+test("YouTube live monitoring keeps manual and channel videos independent", async () => {
+  const [dashboard, liveRoute, migration, envExample] = await Promise.all([
+    readFile(new URL("app/speech-dashboard.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/api/youtube-live/route.ts", projectRoot), "utf8"),
+    readFile(new URL("drizzle/0004_rare_zaladane.sql", projectRoot), "utf8"),
+    readFile(new URL(".env.example", projectRoot), "utf8"),
+  ]);
+
+  assert.match(dashboard, /VIDEO PIDATO/);
+  assert.match(dashboard, /LIVE SEKRETARIAT PRESIDEN/);
+  assert.match(dashboard, /hasYouTube/);
+  assert.match(liveRoute, /SekretariatPresiden/);
+  assert.match(liveRoute, /liveBroadcastContent === "live"/);
+  assert.match(liveRoute, /YOUTUBE_API_KEY/);
+  assert.match(migration, /CREATE TABLE `youtube_live_cache`/);
+  assert.match(envExample, /YOUTUBE_API_KEY=/);
+});

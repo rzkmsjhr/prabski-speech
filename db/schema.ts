@@ -14,3 +14,11 @@ export const speechSchedule = sqliteTable("speech_schedule", {
   youtubeUrl: text("youtube_url").notNull().default(""),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const youtubeLiveCache = sqliteTable("youtube_live_cache", {
+  channelHandle: text("channel_handle").primaryKey(),
+  videoId: text("video_id").notNull().default(""),
+  title: text("title").notNull().default(""),
+  channelTitle: text("channel_title").notNull().default(""),
+  checkedAt: text("checked_at").notNull(),
+});

@@ -111,6 +111,12 @@ a { color:inherit; }
 .youtube-heading { align-items:center; }
 .youtube-live { color:var(--red); display:flex; align-items:center; gap:8px; font-size:9px; font-weight:800; letter-spacing:.13em; }
 .youtube-live i { width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 0 4px rgba(185,31,46,.11); }
+.youtube-live.is-recorded { color:var(--muted); }
+.youtube-live.is-recorded i { background:var(--muted); box-shadow:0 0 0 4px rgba(101,113,106,.11); }
+.youtube-switch { display:grid; grid-template-columns:1fr 1fr; gap:1px; margin-top:20px; padding:1px; background:var(--line); border:1px solid var(--line); }
+.youtube-switch button { min-height:40px; padding:9px 12px; border:0; color:var(--muted); background:#f8f5ed; font-size:9px; font-weight:800; letter-spacing:.1em; cursor:pointer; }
+.youtube-switch button[aria-selected="true"] { color:#fff; background:var(--red); }
+.youtube-switch button:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
 .youtube-frame { position:relative; width:100%; aspect-ratio:16/9; margin-top:20px; background:#111; overflow:hidden; }
 .youtube-frame iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
 .editor { margin-top:22px; }

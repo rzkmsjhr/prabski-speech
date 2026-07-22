@@ -16,7 +16,33 @@ npm run dev
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+Cloudflare Workers and the D1 binding are configured in `wrangler.jsonc`.
+
+## YouTube live monitoring
+
+The public dashboard checks the `@SekretariatPresiden` uploads for an active
+livestream. The result is cached in D1 for two minutes. A manually entered
+YouTube URL remains independent; when both sources are available, the dashboard
+shows a toggle between them.
+
+One-time production setup:
+
+1. Enable **YouTube Data API v3** in a Google Cloud project and create an API
+   key restricted to that API.
+2. Save the key as a Worker secret (never commit it):
+
+   ```bash
+   npx wrangler secret put YOUTUBE_API_KEY
+   ```
+
+3. Apply the D1 cache-table migration:
+
+   ```bash
+   npx wrangler d1 migrations apply prabski-speech-db --remote
+   ```
+
+For local development, copy `.env.example` to `.env` and put the API key in the
+local `.env` file. `.env` is ignored by Git.
 
 ## Included Shape
 

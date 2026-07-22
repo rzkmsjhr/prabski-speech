@@ -18,6 +18,13 @@ type Speech = {
   updatedAt: string;
 };
 
+type ChannelBroadcast = {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  url: string;
+};
+
 type FormState = {
   adminKey: string;
   title: string;
@@ -262,22 +269,47 @@ function AgendaRow({ speech, label }: { speech: Speech; label?: string }) {
   );
 }
 
-function YouTubeLive({ url, title }: { url: string; title: string }) {
-  const videoId = youtubeVideoId(url);
-  if (!videoId) return null;
+function YouTubeLive({ speech, channelBroadcast }: { speech: Speech | null; channelBroadcast: ChannelBroadcast | null }) {
+  const speechVideoId = speech ? youtubeVideoId(speech.youtubeUrl) : "";
+  const initialSource = channelBroadcast ? "channel" : "speech";
+  const [selectedSource, setSelectedSource] = useState<"channel" | "speech">(initialSource);
+  const sources = {
+    channel: channelBroadcast ? {
+      videoId: channelBroadcast.videoId,
+      title: channelBroadcast.title,
+      kicker: "SIARAN LANGSUNG SEKRETARIAT PRESIDEN",
+      badge: "LIVE SEKARANG",
+    } : null,
+    speech: speech && speechVideoId ? {
+      videoId: speechVideoId,
+      title: speech.title,
+      kicker: "VIDEO PIDATO",
+      badge: "VIDEO AGENDA",
+    } : null,
+  };
+  const active = sources[selectedSource] || sources.channel || sources.speech;
+  if (!active) return null;
+  const hasBoth = Boolean(sources.channel && sources.speech);
   return (
       <article className="youtube-card" aria-label="Siaran langsung YouTube">
         <div className="card-heading youtube-heading">
           <div>
-            <p className="section-kicker">SIARAN RESMI</p>
-            <h2>{title}</h2>
+            <p className="section-kicker">{active.kicker}</p>
+            <h2>{active.title}</h2>
           </div>
-          <span className="youtube-live"><i /> LIVE STREAM</span>
+          <span className={`youtube-live ${selectedSource === "speech" ? "is-recorded" : ""}`}><i /> {active.badge}</span>
         </div>
+        {hasBoth && (
+          <div className="youtube-switch" role="tablist" aria-label="Pilih video YouTube">
+            <button type="button" role="tab" aria-selected={selectedSource === "speech"} onClick={() => setSelectedSource("speech")}>VIDEO PIDATO</button>
+            <button type="button" role="tab" aria-selected={selectedSource === "channel"} onClick={() => setSelectedSource("channel")}>LIVE SEKRETARIAT PRESIDEN</button>
+          </div>
+        )}
         <div className="youtube-frame">
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`}
-            title="Siaran langsung pidato di YouTube"
+            key={active.videoId}
+            src={`https://www.youtube-nocookie.com/embed/${active.videoId}?rel=0&modestbranding=1`}
+            title={active.title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
           />
@@ -298,6 +330,7 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
   const [adminValidated, setAdminValidated] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [validating, setValidating] = useState(false);
+  const [channelBroadcast, setChannelBroadcast] = useState<ChannelBroadcast | null>(null);
 
   async function loadSpeeches() {
     try {
@@ -322,10 +355,39 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
     };
   }, []);
 
+  useEffect(() => {
+    if (adminMode) return;
+    let cancelled = false;
+    async function loadChannelBroadcast() {
+      try {
+        const response = await fetch("/api/youtube-live", { cache: "no-store" });
+        const data = (await response.json()) as { broadcast?: ChannelBroadcast | null };
+        if (!cancelled) setChannelBroadcast(data.broadcast || null);
+      } catch {
+        if (!cancelled) setChannelBroadcast(null);
+      }
+    }
+    const initialCheck = window.setTimeout(() => void loadChannelBroadcast(), 0);
+    const timer = window.setInterval(() => void loadChannelBroadcast(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(initialCheck);
+      window.clearInterval(timer);
+    };
+  }, [adminMode]);
+
   const upcoming = useMemo(() => speeches.filter((item) => new Date(item.startsAt).getTime() >= now), [speeches, now]);
   const past = useMemo(() => speeches.filter((item) => new Date(item.startsAt).getTime() < now).reverse(), [speeches, now]);
   const nextSpeech = upcoming[0] || null;
-  const streamingSpeech = upcoming.find((item) => item.youtubeUrl) || null;
+  const streamingSpeech = useMemo(() => {
+    const videos = speeches.filter((item) => youtubeVideoId(item.youtubeUrl));
+    const recent = [...videos].reverse().find((item) => {
+      const startedAt = new Date(item.startsAt).getTime();
+      return startedAt <= now && now - startedAt <= 12 * 60 * 60 * 1_000;
+    });
+    return recent || videos.find((item) => new Date(item.startsAt).getTime() > now) || null;
+  }, [speeches, now]);
+  const hasYouTube = Boolean(streamingSpeech || channelBroadcast);
   const remaining = useMemo(() => (nextSpeech ? countdown(nextSpeech.startsAt, now) : null), [nextSpeech, now]);
 
   function updateField(name: keyof FormState, value: string) {
@@ -452,7 +514,7 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
           <label>Tautan sumber (opsional)<input type="url" value={form.sourceUrl} onChange={(e) => updateField("sourceUrl", e.target.value)} placeholder="https://…" /></label>
           <label>Latitude<input type="number" step="any" min="-90" max="90" value={form.latitude} onChange={(e) => updateField("latitude", e.target.value)} placeholder="-6.1754" required /></label>
           <label>Longitude<input type="number" step="any" min="-180" max="180" value={form.longitude} onChange={(e) => updateField("longitude", e.target.value)} placeholder="106.8272" required /></label>
-          <label className="wide">Tautan YouTube Live (opsional)<input type="url" value={form.youtubeUrl} onChange={(e) => updateField("youtubeUrl", e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /><small className="field-help">Kosongkan agar bagian siaran langsung tidak ditampilkan.</small></label>
+          <label className="wide">Tautan video pidato (opsional)<input type="url" value={form.youtubeUrl} onChange={(e) => updateField("youtubeUrl", e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /><small className="field-help">Video ini tampil sebagai sumber manual. Siaran langsung Sekretariat Presiden dideteksi secara terpisah.</small></label>
           <label className="wide">Catatan (opsional)<textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Informasi akses, siaran, atau konteks singkat" maxLength={500} /></label>
         </div>
         <div className="form-actions"><button className="primary" disabled={saving}>{saving ? "Menyimpan…" : editingId ? "Simpan perubahan" : "Tambahkan jadwal"}</button>{editingId && <button className="secondary" type="button" disabled={saving} onClick={beginCreate}>Batal edit</button>}{message && <p role="status">{message}</p>}</div>
@@ -560,8 +622,8 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
         </article>
       </section>
 
-      <section className={`media-market shell ${streamingSpeech ? "" : "market-only"}`} aria-label="Siaran dan pasar valuta asing">
-        {streamingSpeech && <YouTubeLive url={streamingSpeech.youtubeUrl} title={streamingSpeech.title} />}
+      <section className={`media-market shell ${hasYouTube ? "" : "market-only"}`} aria-label="Siaran dan pasar valuta asing">
+        {hasYouTube && <YouTubeLive key={`${streamingSpeech?.id || "none"}:${channelBroadcast?.videoId || "none"}`} speech={streamingSpeech} channelBroadcast={channelBroadcast} />}
         <article className="currency-card">
           <div className="card-heading">
             <div>
