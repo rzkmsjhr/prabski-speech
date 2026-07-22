@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { youtubeMonitorSchedule } from "./youtube-monitor-schedule";
 
 type Speech = {
   id: number;
@@ -358,6 +359,16 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
   useEffect(() => {
     if (adminMode) return;
     let cancelled = false;
+    let timer: number | undefined;
+
+    function scheduleNextCheck() {
+      if (cancelled) return;
+      const schedule = youtubeMonitorSchedule();
+      if (!schedule.isOpen) setChannelBroadcast(null);
+      const delay = Math.max(1_000, schedule.nextActionAt - Date.now());
+      timer = window.setTimeout(() => void checkSchedule(), delay);
+    }
+
     async function loadChannelBroadcast() {
       try {
         const response = await fetch("/api/youtube-live", { cache: "no-store" });
@@ -365,14 +376,26 @@ export function SpeechDashboard({ adminMode = false }: { adminMode?: boolean }) 
         if (!cancelled) setChannelBroadcast(data.broadcast || null);
       } catch {
         if (!cancelled) setChannelBroadcast(null);
+      } finally {
+        scheduleNextCheck();
       }
     }
-    const initialCheck = window.setTimeout(() => void loadChannelBroadcast(), 0);
-    const timer = window.setInterval(() => void loadChannelBroadcast(), 60_000);
+
+    function checkSchedule() {
+      const schedule = youtubeMonitorSchedule();
+      if (!schedule.isOpen) {
+        setChannelBroadcast(null);
+        scheduleNextCheck();
+        return;
+      }
+      void loadChannelBroadcast();
+    }
+
+    const initialCheck = window.setTimeout(checkSchedule, 0);
     return () => {
       cancelled = true;
       window.clearTimeout(initialCheck);
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [adminMode]);
 

@@ -21,9 +21,11 @@ Cloudflare Workers and the D1 binding are configured in `wrangler.jsonc`.
 ## YouTube live monitoring
 
 The public dashboard checks the `@SekretariatPresiden` uploads for an active
-livestream. The result is cached in D1 for two minutes. A manually entered
-YouTube URL remains independent; when both sources are available, the dashboard
-shows a toggle between them.
+livestream between 07:00 and 20:00 Asia/Jakarta time. It checks every five
+minutes on weekdays and every 30 minutes on weekends; outside that window the
+monitor sleeps without contacting YouTube. A manually entered YouTube URL
+remains independent; when both sources are available, the dashboard shows a
+toggle between them.
 
 One-time production setup:
 

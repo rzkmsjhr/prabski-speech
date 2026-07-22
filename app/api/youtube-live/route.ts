@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { youtubeMonitorSchedule } from "@/app/youtube-monitor-schedule";
 
 type Statement = {
   bind: (...values: unknown[]) => Statement;
@@ -48,7 +49,6 @@ type Broadcast = {
 };
 
 const CHANNEL_HANDLE = "SekretariatPresiden";
-const CACHE_MAX_AGE_MS = 120_000;
 const cacheSchema = `CREATE TABLE IF NOT EXISTS youtube_live_cache (
   channel_handle TEXT PRIMARY KEY,
   video_id TEXT NOT NULL DEFAULT '',
@@ -127,9 +127,25 @@ async function findLiveBroadcast(apiKey: string): Promise<Broadcast | null> {
 
 export async function GET() {
   const { DB: db, YOUTUBE_API_KEY: apiKey } = bindings();
+  const schedule = youtubeMonitorSchedule();
+  const scheduleDetails = {
+    active: schedule.isOpen,
+    weekend: schedule.isWeekend,
+    intervalMinutes: schedule.intervalMs / 60_000,
+    nextCheckAt: new Date(schedule.nextActionAt).toISOString(),
+    timeZone: "Asia/Jakarta",
+  };
+
+  if (!schedule.isOpen) {
+    return Response.json(
+      { broadcast: null, configured: Boolean(apiKey), schedule: scheduleDetails },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
+
   if (!db || !apiKey) {
     return Response.json(
-      { broadcast: null, configured: Boolean(apiKey) },
+      { broadcast: null, configured: Boolean(apiKey), schedule: scheduleDetails },
       { headers: { "cache-control": "no-store" } },
     );
   }
@@ -139,9 +155,9 @@ export async function GET() {
     "SELECT video_id, title, channel_title, checked_at FROM youtube_live_cache WHERE channel_handle = ?",
   ).bind(CHANNEL_HANDLE).first<CacheRow>();
   const cacheAge = cached ? Date.now() - Date.parse(cached.checked_at) : Number.POSITIVE_INFINITY;
-  if (cacheAge < CACHE_MAX_AGE_MS) {
+  if (cacheAge < schedule.intervalMs) {
     return Response.json(
-      { broadcast: serialize(cached), configured: true },
+      { broadcast: serialize(cached), configured: true, schedule: scheduleDetails },
       { headers: { "cache-control": "no-store" } },
     );
   }
@@ -166,13 +182,26 @@ export async function GET() {
       )
       .run();
     return Response.json(
-      { broadcast, configured: true },
+      { broadcast, configured: true, schedule: scheduleDetails },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (error) {
     console.error("Unable to check the YouTube channel", error);
+    const checkedAt = new Date().toISOString();
+    await db.prepare(`INSERT INTO youtube_live_cache
+      (channel_handle, video_id, title, channel_title, checked_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(channel_handle) DO UPDATE SET checked_at = excluded.checked_at`)
+      .bind(
+        CHANNEL_HANDLE,
+        cached?.video_id || "",
+        cached?.title || "",
+        cached?.channel_title || "",
+        checkedAt,
+      )
+      .run();
     return Response.json(
-      { broadcast: serialize(cached), configured: true, stale: Boolean(cached) },
+      { broadcast: serialize(cached), configured: true, stale: Boolean(cached), schedule: scheduleDetails },
       { headers: { "cache-control": "no-store" } },
     );
   }
